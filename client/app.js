@@ -5,7 +5,9 @@
  */
 
 // Base URL for the API. Use this for all requests (e.g. API_BASE + '/api/join').
-const API_BASE = window.location.origin;
+const API_BASE = "https://unpopulously-ungrimed-pilar.ngrok-free.dev";
+const NGROK_HEADER = { 'ngrok-skip-browser-warning': 1 };
+
 
 // -----------------------------------------------------------------------------
 // State (set after join)
@@ -21,16 +23,28 @@ let pollInterval = null;
 // On error: call showJoinError(message).
 // -----------------------------------------------------------------------------
 function joinGame(name) {
-  // TODO: use fetch() to POST to API_BASE + '/api/join'
-  // Body: JSON.stringify({ name: name })
-  // Headers: { 'Content-Type': 'application/json' }
-  // Parse response with .json(), check for player_id, then:
-  //   playerId = data.player_id;
-  //   playerName = data.name;
-  //   onJoined();
-  //   startPolling();
-  // On error response (e.g. !response.ok), read JSON and call showJoinError(data.error || 'Join failed');
-  showJoinError('TODO: implement joinGame()');
+  fetch(API_BASE + '/api/join', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', NGROK_HEADER },
+    body: JSON.stringify({ name: name })
+  })
+    .then(function(response) {
+      return response.json().then(function(data) {
+        if (!response.ok) {
+          showJoinError(data.error || 'Join failed');
+        } else {
+          playerId = data.player_id;
+          playerName = data.name;
+          console.log('joined');
+          console.log('playerId:', playerId, 'name:', playerName);
+          onJoined();
+          startPolling();
+        }
+      });
+    })
+    .catch(function() {
+      showJoinError('Join failed');
+    });
 }
 
 function onJoined() {
@@ -52,11 +66,20 @@ function showJoinError(message) {
 // Update the UI: phase display, prompt display, show/hide answer/guess/results areas.
 // -----------------------------------------------------------------------------
 function pollState() {
-  // TODO: use fetch() to GET API_BASE + '/api/state'
-  // Parse JSON, then update:
-  //   document.getElementById('phase-display').textContent = 'Phase: ' + data.phase + '  Round ' + data.round_id + '/' + data.round_total;
-  //   document.getElementById('prompt-display').textContent = data.prompt || '—';
-  //   Show/hide #answer-area (phase === 'ANSWER'), #guess-area (phase === 'GUESS'), #results-area (phase === 'RESULTS')
+  fetch(API_BASE + '/api/state', { headers: NGROK_HEADER })
+    .then(function(response) {
+      return response.json();
+    })
+    .then(function(data) {
+      console.log('pollState data:', data);
+      currentRoundId = data.round_id;
+      document.getElementById('phase-display').textContent = 'Phase: ' + data.phase + '  Round ' + data.round_id + '/' + data.round_total;
+      document.getElementById('prompt-display').textContent = data.prompt || '—';
+      document.getElementById('answer-area').hidden = (data.phase !== 'ANSWER');
+      document.getElementById('guess-area').hidden = (data.phase !== 'GUESS');
+      document.getElementById('results-area').hidden = (data.phase !== 'RESULTS');
+      return data;
+    })
 }
 
 function startPolling() {
@@ -76,11 +99,25 @@ let currentRoundId = null; // set this in pollState() from data.round_id
 function submitAnswer() {
   const answer = document.getElementById('answer').value.trim();
   if (!answer) return;
-  // TODO: use fetch() to POST to API_BASE + '/api/answer'
-  // Body: JSON.stringify({ player_id: playerId, round_id: currentRoundId, answer: answer })
-  // Headers: { 'Content-Type': 'application/json' }
-  // On success: clear input, set #answer-status to "Answer submitted"
-  // On error (e.g. 409): read JSON and show data.error in #answer-status with class "status error"
+  console.log('submitAnswer called with:', answer, 'roundId:', currentRoundId);
+  fetch(API_BASE + '/api/answer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ player_id: playerId, round_id: currentRoundId, answer: answer })
+  })
+    .then(function(response) {
+      return response.json().then(function(data) {
+        console.log('submitAnswer response:', data);
+        if (!response.ok) {
+          document.getElementById('answer-status').textContent = data.error || 'Error';
+          document.getElementById('answer-status').className = 'status error';
+        } else {
+          document.getElementById('answer').value = '';
+          document.getElementById('answer-status').textContent = 'Answer submitted';
+          document.getElementById('answer-status').className = 'status';
+        }
+      });
+    })
 }
 
 // -----------------------------------------------------------------------------
@@ -91,11 +128,25 @@ function submitAnswer() {
 function submitGuess() {
   const guess = document.getElementById('guess').value.trim();
   if (!guess) return;
-  // TODO: use fetch() to POST to API_BASE + '/api/guess'
-  // Body: JSON.stringify({ player_id: playerId, round_id: currentRoundId, guess: guess })
-  // Headers: { 'Content-Type': 'application/json' }
-  // On success: clear input, set #guess-status to "Guess submitted"
-  // On error: show data.error in #guess-status with class "status error"
+  console.log('submitGuess called with:', guess, 'roundId:', currentRoundId);
+  fetch(API_BASE + '/api/guess', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ player_id: playerId, round_id: currentRoundId, guess: guess })
+  })
+    .then(function(response) {
+      return response.json().then(function(data) {
+        console.log('submitGuess response:', data);
+        if (!response.ok) {
+          document.getElementById('guess-status').textContent = data.error || 'Error';
+          document.getElementById('guess-status').className = 'status error';
+        } else {
+          document.getElementById('guess').value = '';
+          document.getElementById('guess-status').textContent = 'Guess submitted';
+          document.getElementById('guess-status').className = 'status';
+        }
+      });
+    })
 }
 
 // -----------------------------------------------------------------------------
@@ -104,9 +155,18 @@ function submitGuess() {
 // Display the returned breakdown and majority_answers in #results (e.g. JSON.stringify(data, null, 2)).
 // -----------------------------------------------------------------------------
 function fetchResults() {
-  // TODO: use fetch() to GET API_BASE + '/api/results?round_id=' + currentRoundId
-  // Parse JSON, then set document.getElementById('results').textContent = JSON.stringify(data, null, 2);
-  // On error (e.g. 409): show message that results are not available yet
+  console.log('fetchResults called for roundId:', currentRoundId);
+  fetch(API_BASE + '/api/results?round_id=' + currentRoundId, { headers: NGROK_HEADER })
+    .then(function(response) {
+      return response.json().then(function(data) {
+        console.log('fetchResults response:', data);
+        if (!response.ok) {
+          document.getElementById('results').textContent = data.error || 'Results not available yet';
+        } else {
+          document.getElementById('results').textContent = JSON.stringify(data, null, 2);
+        }
+      });
+    })
 }
 
 // -----------------------------------------------------------------------------
